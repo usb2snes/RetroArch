@@ -45,6 +45,7 @@
 
 #include "../accessibility.h"
 #include "../command.h"
+#include "../nwasupport/nwasupport.h"
 #include "../config.def.keybinds.h"
 #include "../driver.h"
 #include "../retroarch.h"
@@ -3739,6 +3740,10 @@ void input_driver_init_command(
    if (!(input_st->command[2] = command_uds_new()))
       RARCH_ERR("Failed to initialize the UDS command interface.\n");
 #endif
+//#ifdef HAVE_NWA
+   if (!(input_st->command[3] = nwa_support_new()))
+      RARCH_ERR("Failed to initialize NWA Support\n");
+//#endif
 }
 
 void input_driver_deinit_command(input_driver_state_t *input_st)

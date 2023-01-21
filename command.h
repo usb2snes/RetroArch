@@ -36,7 +36,7 @@
 
 RETRO_BEGIN_DECLS
 
-#define MAX_CMD_DRIVERS              3
+#define MAX_CMD_DRIVERS              4
 #define DEFAULT_NETWORK_CMD_PORT 55355
 
 struct cmd_map

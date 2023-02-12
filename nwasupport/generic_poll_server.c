@@ -326,7 +326,7 @@ static int64_t execute_command(generic_poll_server_client* client, char *cmd_str
     }
     for (unsigned int i = 0; i < custom_emu_nwa_map_size; i++)
     {
-        if (strcmp(cmd_str, custom_emu_nwa_map[i].string) == 0)
+        if (strncmp(cmd_str, custom_emu_nwa_map[i].string, strlen(custom_emu_nwa_map[i].string)) == 0)
         {
             command = CUSTOM + i;
             custom_command_index = i;

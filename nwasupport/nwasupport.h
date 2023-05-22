@@ -41,7 +41,7 @@ int64_t nwasupport_emulation_reset(SOCKET sock, char** arg, int ac);
 int64_t nwasupport_save_state(SOCKET sock, char** arg, int ac);
 int64_t nwasupport_load_state(SOCKET sock, char** arg, int ac);
 int64_t nwasupport_retroarch_event_command(SOCKET sock, char** arg, int ac);
-int64_t nwasupport_retroarch_core_read_memory(SOCKET sock, char** arg, int ac);
+int64_t nwasupport_retroarch_read_core_memory(SOCKET sock, char** arg, int ac);
 int64_t nwasupport_retroarch_core_write_memory(SOCKET sock, char** arg, int ac);
 
 command_t* nwa_support_new();

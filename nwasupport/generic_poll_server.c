@@ -107,9 +107,13 @@ static void __send_hash_reply(SOCKET socket, bool end, unsigned int key_count, v
         char* buffer = (char*) malloc(size_kv + 3);
         snprintf(buffer, size_kv + 2, "%s:%s", key, value);
         buffer[size_kv + 1] = '\n';
-        write(socket, buffer, size_kv + 2);
+        int err = write(socket, buffer, size_kv + 2);
+        if (err < 0)
+        {
+            s_debug(">>Error with write %d\n", err);
+        }
         buffer[size_kv + 2] = 0;
-        s_debug("Sending : %s", buffer);
+        s_debug(">>Sending : %s", buffer);
         free(buffer);
         //dprintf(socket, "%s=%s\n", key, value); This does not exists on windows
     }
@@ -125,7 +129,12 @@ inline void    generic_poll_server_start_hash_reply(SOCKET socket)
 
 inline void    generic_poll_server_end_hash_reply(SOCKET socket)
 {
-    write(socket, "\n", 1);
+    s_debug("Send end\n");
+    int err = write(socket, "\n", 1);
+    if (err < 1)
+    {
+        s_debug("Error writing to socket %d\n", err);
+    }
 }
 
 void    generic_poll_server_send_hash_reply(SOCKET socket, int key_count, ...)
@@ -351,6 +360,7 @@ static int64_t execute_command(generic_poll_server_client* client, char *cmd_str
             return generic_emu_nwa_map[i].function(client->socket_fd, args, args_count);
         }
     }
+    send_error(client->socket_fd, invalid_command, "Invalid command or not implemented");
     return -1;
 }
 
@@ -661,14 +671,11 @@ bool  generic_poll_server_poll_code(int poll_timeout)
                 {
                     s_debug("Disconnecting client\n");
                     remove_client(poll_fds[i].fd);
-                    if (poll_fds[i].fd != poll_fds[poll_fds_count - 1].fd)
-                    {
-                        // We are not removing the last one
+                    if (i != poll_fds_count - 1)
                         poll_fds[i] = poll_fds[poll_fds_count - 1];
-                        i--;
-                    }
                     poll_fds_count--;
-                }
+                    i--;
+                 }
             }
             // This is when the socket is not closed nicely
             // Check if POLLIN and POLLERR can happen at the same time
@@ -676,16 +683,23 @@ bool  generic_poll_server_poll_code(int poll_timeout)
             {
                 s_debug("Disconnecting client err(%X)/hup(%X) : %X\n", POLLERR, POLLHUP, poll_fds[i].revents);
                 remove_client(poll_fds[i].fd);
-                if (poll_fds[i].fd != poll_fds[poll_fds_count - 1].fd)
-                {
-                    // We are not removing the last one
-                    poll_fds[i] = poll_fds[poll_fds_count - 1];
-                    i--;
-                }
+                if (i != poll_fds_count - 1)
+                        poll_fds[i] = poll_fds[poll_fds_count - 1];
                 poll_fds_count--;
+                i--;
             }
         }
         return true;
+}
+
+static bool generic_poll_server_close()
+{
+    for (unsigned int i = 0; i < 5; i++)
+    {
+        if (clients[i].socket_fd != 0)
+            close(clients[i].socket_fd);        
+    }
+    close(server_socket);
 }
 
 static bool generic_poll_server_start(int poll_timeout)

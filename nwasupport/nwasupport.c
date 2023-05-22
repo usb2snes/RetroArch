@@ -272,7 +272,7 @@ const generic_emu_nwa_commands_map_t generic_emu_nwa_map = {
 const unsigned int generic_emu_nwa_map_size = 10;
 const custom_emu_nwa_commands_map_t custom_emu_nwa_map = {
    {"RETROARCH_EVENT_COMMAND", nwasupport_retroarch_event_command},
-   {"RETROARCH_CORE_READ_MEMORY", nwasupport_retroarch_core_read_memory},
+   {"RETROARCH_READ_CORE_MEMORY", nwasupport_retroarch_read_core_memory},
    {"bRETROARCH_CORE_WRITE_MEMORY", nwasupport_retroarch_core_write_memory}
 };
 const unsigned int custom_emu_nwa_map_size = 3;
@@ -297,7 +297,7 @@ static char*	hexString(const char* str, const unsigned int size)
 }
 
 
-#define SKARSNIK_DEBUG
+#define SKARSNIK_DEBUG 1
 
 #include "nwasupport/generic_poll_server.c"
 
@@ -308,9 +308,16 @@ static void nwa_support_poll(command_t* command)
    generic_poll_server_poll_code(0);
 }
 
+static command_t* m_command = NULL;
+
+
+// Loading a content seems to restart all of this, this is not acceptable
 static void nwa_support_destroy(command_t* command)
 {
+   return ;
    free(command);
+   generic_poll_server_close();
+   m_command = NULL;
 }
 
 static void nwa_support_replier(command_t* command, const char* data, size_t len)
@@ -320,13 +327,15 @@ static void nwa_support_replier(command_t* command, const char* data, size_t len
 
 command_t*  nwa_support_new()
 {
-      command_t* command = (command_t*) malloc(sizeof(command_t));
-      command->poll = nwa_support_poll;
-      command->destroy =  nwa_support_destroy;
-      command->replier = nwa_support_replier;
-
-      generic_poll_server_start(0);
-      return command;
+   if (m_command != NULL)
+      return m_command;
+   command_t* command = (command_t*) malloc(sizeof(command_t));
+   command->poll = nwa_support_poll;
+   command->destroy =  nwa_support_destroy;
+   command->replier = nwa_support_replier;
+   m_command = command;
+   generic_poll_server_start(0);
+   return command;
 }
 
 int64_t nwasupport_my_name_is(SOCKET sock, char** arg, int ac)
@@ -350,7 +359,7 @@ int64_t nwasupport_emulator_info(SOCKET sock, char** ag, int ac)
                             "commands", "EMULATOR_INFO,EMULATION_STATUS,GAME_INFO,CORES_LIST,CORE_CURRENT_INFO,CORE_INFO,MY_NAME_IS,"
                             "EMULATION_PAUSE,EMULATION_RESUME,EMULATION_RESET,"
                             "LOAD_STATE,SAVE_STATE,"
-                            "RETROARCH_EVENT_COMMAND,RETROARCH_CORE_READ_MEMORY,bRETROARCH_CORE_WRITE_MEMORY");
+                            "RETROARCH_EVENT_COMMAND,RETROARCH_READ_CORE_MEMORY,bRETROARCH_CORE_WRITE_MEMORY");
      return 0;
 }
 
@@ -421,15 +430,21 @@ int64_t nwasupport_cores_list(SOCKET sock, char** arg, int ac)
    return 0;
 }
 
+static char* nwaplatform_name(const char* str)
+{
+   if (strcmp(str, "Super Nintendo Entertainment System") == 0)
+      return "SNES";
+}
+
 static void nwasupport_send_core_info(SOCKET sock, core_info_t* core_info)
 {
    s_debug("SE : %s\n", core_info->supported_extensions);
    char* supported_extensions = core_info->supported_extensions;
    if (core_info->supported_extensions == NULL)
       supported_extensions = "none";
-   send_full_hash_reply(sock, 10, "name", core_info->core_name,
+   send_full_hash_reply(sock, 9, "name", core_info->core_name,
                                   "display_name", core_info->display_name,
-                                  "platform", core_info->systemname,
+                                  "platform", nwaplatform_name(core_info->systemname),
                                   "system_name", core_info->systemname,
                                   "supported_extensions", supported_extensions,
                                   "version", core_info->display_version,
@@ -472,7 +487,8 @@ int64_t nwasupport_core_info(SOCKET sock, char** arg, int ac)
 int64_t nwasupport_core_current_info(SOCKET sock, char** arg, int ac)
 {
    core_info_t* core_info;
-   if (!core_info_get_current_core(&core_info))
+   bool success = core_info_get_current_core(&core_info);
+   if (!success || core_info == NULL)
    {
       send_error(sock, command_error, "No current core loaded");
       return 0;
@@ -615,23 +631,18 @@ static const rarch_memory_descriptor_t* command_memory_get_descriptor(const rarc
    return NULL;
 }
 
-int64_t nwasupport_retroarch_core_read_memory(SOCKET sock, char** arg, int ac)
+int64_t nwasupport_retroarch_read_core_memory(SOCKET sock, char** arg, int ac)
 {
    if (ac != 2)
    {
-      send_error(sock, invalid_argument, "RETROARCH_CORE_READ_MEMORY need 2 arguments <address>;<size>");
+      send_error(sock, invalid_argument, "RETROARCH_READ_CORE_MEMORY need 2 arguments <address>;<size>");
       return 0;
    }
    char*    end_strtoll;
    size_t   address;
    size_t   size;
 
-   address = strtoll(arg[0], &end_strtoll, 10);
-   if (arg[0] == end_strtoll)
-   {
-      send_error(sock, invalid_argument, "RETROARCH_CORE_READ_MEMORY, invalid first argument, no number found");
-      return 0;
-   }
+   address = generic_poll_server_get_offset(arg[0]);
    size = strtoll(arg[1], &end_strtoll, 10);
    if (arg[1] == end_strtoll)
    {
